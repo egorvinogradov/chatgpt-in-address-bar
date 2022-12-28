@@ -1,0 +1,113 @@
+<html manifest="/manifest.appcache">
+<head>
+  <title>+++</title>
+</head>
+<body>
+<style>
+  body {
+    overflow: visible !important;
+  }
+  textarea {
+    margin: 30px 0 300px 30px;
+    width: calc(100vw - 80px);
+    height: calc(100vh - 80px);
+    resize: vertical;
+    font-size: 16px;
+    line-height: 24px;
+    padding: 10px 13px;
+  }
+</style>
+    <textarea autofocus></textarea>
+    <script>
+
+      function parseGetParams(){
+        const params = {};
+        location.search.replace(/^\?/, '').split('&').forEach((pair) => {
+          const [ key, value ] = pair.split('=');
+          params[key] = decodeURIComponent(value.replace(/\+/g, '%20'));
+        });
+        return params;
+      }
+
+      function getAPIKey(){
+        if (localStorage.apiKey) {
+          return localStorage.apiKey;
+        }
+        else {
+          const message = [
+            'API KEY NEEDED\n',
+            '1. Go to https://beta.openai.com/account/api-keys',
+            '2. Create API key',
+            '3. Insert below',
+          ];
+          const apiKey = prompt(message.join('\n'));
+          if (apiKey) {
+            localStorage.apiKey = apiKey;
+          }
+        }
+      }
+
+      function askChatGPT(question, apiKey) {
+        const API_ENDPOINT = 'https://api.openai.com/v1/completions';
+        const fullURL = `https://corsproxy.io/?${encodeURIComponent(API_ENDPOINT)}`;
+
+        return fetch(fullURL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey,
+          },
+          body: JSON.stringify({
+            prompt: question,
+            model: 'text-davinci-003',
+            max_tokens: 3000,
+          })
+        })
+        .then(response => response.json())
+      }
+
+      function handleChatGPTQuery(query, apiKey){
+        const loader = setInterval(() => {
+          textarea.value = (textarea.value || '') + '.';
+        }, 300);
+
+        return askChatGPT(query, apiKey)
+          .then(answer => {
+            const answerText = answer.choices?.[0]?.text?.trim();
+            const separator = '\n\n------------------------\n\n';
+
+            if (answerText) {
+              textarea.value = [query, separator, answerText].join('');
+              window.__.chatGPTAnswer = answerText;
+            }
+
+            if (answer.error) {
+              textarea.value = 'ERROR:\n\n' + JSON.stringify(answer, 0, 2);
+              if (answer.error.code === 'invalid_api_key') {
+                delete localStorage.apiKey;
+              }
+            }
+          })
+          .finally(e => {
+            clearInterval(loader);
+          });
+      }
+      
+      const textarea = document.getElementsByTagName('textarea')[0];
+      const params = parseGetParams();
+
+      if (params.text) {
+        textarea.value = params.text;
+      }
+      if (params.chatgpt) {
+        const apiKey = getAPIKey();
+        if (apiKey) {
+          handleChatGPTQuery(params.chatgpt, apiKey);
+        }
+      }
+
+      window.__ = { textarea, params };
+
+    </script>
+</body>
+</html>
